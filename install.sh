@@ -148,15 +148,21 @@ cat <<EOF
      A    *.$DOMAIN
 
 2) Certificado wildcard (o nginx termina o TLS). Com certbot + DNS-01,
-   ex. Cloudflare:
+   ex. Cloudflare (token com permissão Zone > DNS > Edit):
 
-     apt install -y python3-certbot-dns-cloudflare
-     printf 'dns_cloudflare_api_token = SEU_TOKEN\n' > /root/.cf.ini && chmod 600 /root/.cf.ini
-     certbot certonly --dns-cloudflare --dns-cloudflare-credentials /root/.cf.ini \\
-       -d '$DOMAIN' -d '*.$DOMAIN' -m $EMAIL --agree-tos
+     apt-get install -y python3-certbot-dns-cloudflare
+     printf 'dns_cloudflare_api_token = SEU_TOKEN\n' > /root/.cloudflare.ini
+     chmod 600 /root/.cloudflare.ini
+     certbot certonly --dns-cloudflare \\
+       --dns-cloudflare-credentials /root/.cloudflare.ini \\
+       --dns-cloudflare-propagation-seconds 30 \\
+       -d '$DOMAIN' -d '*.$DOMAIN' -m $EMAIL --agree-tos --non-interactive \\
+       --deploy-hook "systemctl reload nginx"
 
+   O --deploy-hook é essencial: sem ele o certbot renova o certificado a
+   cada 90 dias mas o nginx segue servindo o antigo até um reload manual.
    (Outro provedor de DNS: troque o plugin — certbot-dns-route53,
-    certbot-dns-digitalocean etc. Veja o README.)
+    certbot-dns-digitalocean etc.)
 
 3) Ative o site do lgrok (a config já está pronta e revisável):
 

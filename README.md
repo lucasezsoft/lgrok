@@ -112,6 +112,56 @@ novos/semana (que só importa se seus clientes criarem dezenas de subdomínios
 aleatórios novos toda semana). É um upgrade, não uma dependência. Na Cloudflare,
 deixe os registros como "DNS only" (nuvem cinza).
 
+### A VPS já tem nginx/apache rodando outros sites?
+
+O lgrok não precisa das portas 80/443 para si. Instale no modo **atrás do nginx** —
+o `lgrokd` sobe só em `127.0.0.1:8080` e o seu nginx repassa o tráfego:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucasezsoft/lgrok/main/install.sh | sudo bash -s -- \
+  --behind-nginx --domain seudominio.com --email voce@exemplo.com
+```
+
+Seus sites atuais continuam intactos: o nginx casa `server_name` **exato** antes do
+wildcard, então só os subdomínios que ainda não existem chegam ao lgrok. Ainda
+assim, use um **domínio dedicado** para os túneis (ex.: `uberlandia.dev.br`) e não
+o mesmo dos seus sites — assim nenhum cliente consegue reservar um nome que colida
+com produção.
+
+O instalador **gera** `/etc/nginx/sites-available/lgrok` mas **não ativa nada** —
+mexer num nginx com produção é decisão sua. Faltam 3 passos manuais que ele imprime:
+
+1. **DNS**: `A lgrok → IP` e `A * → IP`.
+2. **Certificado wildcard** — o nginx termina o TLS, e wildcard exige validação por
+   DNS (DNS-01). Com Cloudflare:
+
+```bash
+apt-get install -y python3-certbot-dns-cloudflare
+printf 'dns_cloudflare_api_token = SEU_TOKEN\n' > /root/.cloudflare.ini
+chmod 600 /root/.cloudflare.ini
+certbot certonly --dns-cloudflare \
+  --dns-cloudflare-credentials /root/.cloudflare.ini \
+  --dns-cloudflare-propagation-seconds 30 \
+  -d 'seudominio.com' -d '*.seudominio.com' \
+  -m voce@exemplo.com --agree-tos --non-interactive \
+  --deploy-hook "systemctl reload nginx"
+```
+
+   O `--deploy-hook` é essencial: sem ele o certbot renova a cada 90 dias mas o
+   nginx segue servindo o certificado antigo. Outros provedores: troque o plugin
+   (`certbot-dns-route53`, `certbot-dns-digitalocean`, ...).
+
+3. **Ativar o site**:
+
+```bash
+cat /etc/nginx/sites-available/lgrok       # revise antes
+ln -s /etc/nginx/sites-available/lgrok /etc/nginx/sites-enabled/lgrok
+nginx -t && systemctl reload nginx
+```
+
+Gerenciamento nesse modo usa `docker-compose.behind-proxy.yml` no lugar de
+`docker-compose.prod.yml`.
+
 ### Gerenciar o servidor
 
 ```bash
