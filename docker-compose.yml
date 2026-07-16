@@ -1,0 +1,13 @@
+# Ambiente de TESTE LOCAL do servidor lgrokd.
+#
+#   docker compose up -d --build
+#
+# URLs de túnel ficam em http://<sub>.lvh.me:8080 (lvh.me resolve para
+# 127.0.0.1 — nenhuma configuração de DNS é necessária para testar).
+services:
+  lgrokd:
+    build: .
+    ports:
+      - "8080:8080"
+    command: ["--domain", "lvh.me:8080", "--scheme", "http", "--token", "dev-token"]
+    restart: unless-stopped

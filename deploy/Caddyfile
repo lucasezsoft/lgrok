@@ -1,0 +1,25 @@
+# Caddy na frente do lgrokd: termina TLS (Let's Encrypt automático) e
+# repassa tudo — inclusive a conexão de controle do CLI (upgrade websocket).
+#
+# Modelo de domínio: lgrok.{$LGROK_DOMAIN} é o endpoint fixo (downloads +
+# conexão dos clientes); os túneis ficam em <sub>.{$LGROK_DOMAIN}.
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		# lgrokd só autoriza certificado para lgrok.<domínio> e túneis ativos
+		ask http://lgrokd:8080/_lgrok/ask
+	}
+}
+
+# Endpoint fixo: página de status/downloads + conexão dos clientes
+lgrok.{$LGROK_DOMAIN} {
+	reverse_proxy lgrokd:8080
+}
+
+# Qualquer subdomínio: certificado emitido sob demanda no primeiro acesso
+https:// {
+	tls {
+		on_demand
+	}
+	reverse_proxy lgrokd:8080
+}

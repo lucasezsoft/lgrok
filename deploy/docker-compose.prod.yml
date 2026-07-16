@@ -1,0 +1,33 @@
+# Deploy de PRODUÇÃO (VPS com portas 80/443 abertas).
+#
+# 1. Crie um arquivo .env nesta pasta:
+#      LGROK_DOMAIN=tunnel.seudominio.com
+#      LGROK_TOKEN=um-token-secreto-forte
+#      ACME_EMAIL=voce@seudominio.com
+# 2. Aponte o DNS (A: tunnel -> IP, A: *.tunnel -> IP)
+# 3. docker compose -f docker-compose.prod.yml up -d --build
+services:
+  lgrokd:
+    build: ..
+    command: ["--domain", "${LGROK_DOMAIN}", "--scheme", "https"]
+    environment:
+      LGROK_TOKEN: ${LGROK_TOKEN}
+    restart: unless-stopped
+
+  caddy:
+    build: ./caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # CADDYFILE=Caddyfile.cloudflare no .env ativa o modo wildcard (DNS-01)
+      - ./${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    environment:
+      LGROK_DOMAIN: ${LGROK_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

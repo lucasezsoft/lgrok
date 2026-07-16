@@ -1,0 +1,17 @@
+# Variante para DNS na Cloudflare: certificado WILDCARD via desafio DNS-01.
+# Um único cert *.{$LGROK_DOMAIN} cobre os túneis E o endpoint fixo
+# lgrok.{$LGROK_DOMAIN} — sem emissão por subdomínio, sem latência no
+# primeiro acesso, sem limites do Let's Encrypt.
+#
+# Requer: CADDYFILE=Caddyfile.cloudflare e CF_API_TOKEN=... no .env
+# (token da API Cloudflare com permissão Zone > DNS > Edit na zona do domínio).
+{
+	email {$ACME_EMAIL}
+}
+
+*.{$LGROK_DOMAIN} {
+	tls {
+		dns cloudflare {$CF_API_TOKEN}
+	}
+	reverse_proxy lgrokd:8080
+}
