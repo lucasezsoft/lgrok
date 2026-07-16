@@ -29,18 +29,22 @@ else
   sudo mv "$TMP" "$INSTALL_DIR/lgrok"
 fi
 
+# Pré-configura o servidor para a primeira execução (não sobrescreve config existente)
+CFG="${LGROK_CONFIG:-$HOME/.lgrok.json}"
+if [[ ! -f "$CFG" ]]; then
+  printf '{\n  "server": "%s"\n}\n' "$SERVER" > "$CFG"
+  chmod 600 "$CFG"
+fi
+
 cat <<EOF
 
 ✔ lgrok instalado em $INSTALL_DIR/lgrok
 
-Para gerar seu link público (peça o token ao administrador):
+Para gerar seu link público, rode (com sua aplicação no ar, ex.: porta 3000):
 
-  lgrok http 3000 --server $SERVER --token SEU_TOKEN
+  lgrok http 3000
 
-Dica — configure uma vez no seu ~/.zshrc (ou ~/.bashrc):
-
-  export LGROK_SERVER=$SERVER
-  export LGROK_TOKEN=SEU_TOKEN
-
-e o comando vira só:  lgrok http 3000
+Na primeira vez ele pergunta o token da empresa, o subdomínio que você quer
+e uma senha que trava esse subdomínio para você. Fica tudo salvo em
+$CFG — nas próximas vezes é só rodar o comando.
 EOF

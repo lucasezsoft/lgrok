@@ -7,7 +7,11 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -32,9 +36,17 @@ type server struct {
 	scheme    string
 	token     string
 	downloads string
+	statePath string
 
 	mu      sync.Mutex
 	tunnels map[string]*tunnel
+	claims  map[string]claim // subdomain -> password hash (persisted)
+}
+
+// claim locks a subdomain to whoever set its password first.
+type claim struct {
+	Salt string `json:"salt"`
+	Hash string `json:"hash"`
 }
 
 type tunnel struct {
@@ -48,6 +60,7 @@ func main() {
 	scheme := flag.String("scheme", "http", "scheme of public URLs (http|https)")
 	token := flag.String("token", os.Getenv("LGROK_TOKEN"), "auth token required from clients (empty = no auth)")
 	downloads := flag.String("downloads", "/srv/dist", "directory with lgrok CLI binaries served at /download/")
+	statePath := flag.String("state", "/data/claims.json", "file persisting subdomain password claims")
 	flag.Parse()
 
 	s := &server{
@@ -56,7 +69,14 @@ func main() {
 		scheme:    *scheme,
 		token:     *token,
 		downloads: *downloads,
+		statePath: *statePath,
 		tunnels:   map[string]*tunnel{},
+		claims:    map[string]claim{},
+	}
+	os.MkdirAll(filepath.Dir(s.statePath), 0o700)
+	if b, err := os.ReadFile(s.statePath); err == nil {
+		json.Unmarshal(b, &s.claims)
+		log.Printf("loaded %d subdomain claims from %s", len(s.claims), s.statePath)
 	}
 	log.Printf("lgrokd listening on %s, tunnel URLs: %s://<sub>.%s", *addr, s.scheme, s.domain)
 	srv := &http.Server{Addr: *addr, Handler: s, ReadHeaderTimeout: 10 * time.Second}
@@ -127,11 +147,32 @@ func (s *server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sub := r.Header.Get("X-Lgrok-Subdomain")
-	if sub == "" {
+	requested := sub != ""
+	if !requested {
 		sub = randomSub()
 	} else if sub == "lgrok" || !subdomainRe.MatchString(sub) {
 		http.Error(w, "lgrok: invalid subdomain (use [a-z0-9-]; 'lgrok' is reserved)", http.StatusBadRequest)
 		return
+	}
+
+	// Named subdomains are locked by password: the first client to bring a
+	// password claims the name; afterwards only that password opens it.
+	if requested {
+		secret := r.Header.Get("X-Lgrok-Secret")
+		s.mu.Lock()
+		if c, claimed := s.claims[sub]; claimed {
+			if subtle.ConstantTimeCompare([]byte(hashSecret(c.Salt, secret)), []byte(c.Hash)) != 1 {
+				s.mu.Unlock()
+				http.Error(w, "lgrok: subdomínio reservado por outro usuário — senha incorreta", http.StatusForbidden)
+				return
+			}
+		} else if secret != "" {
+			salt := randomSub()
+			s.claims[sub] = claim{Salt: salt, Hash: hashSecret(salt, secret)}
+			s.saveClaims()
+			log.Printf("subdomain claimed: %s", sub)
+		}
+		s.mu.Unlock()
 	}
 
 	s.mu.Lock()
@@ -217,6 +258,22 @@ func (s *server) count() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.tunnels)
+}
+
+// saveClaims persists the claims map; callers must hold s.mu.
+func (s *server) saveClaims() {
+	b, _ := json.MarshalIndent(s.claims, "", "  ")
+	tmp := s.statePath + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		log.Printf("warn: cannot persist claims: %v", err)
+		return
+	}
+	os.Rename(tmp, s.statePath)
+}
+
+func hashSecret(salt, secret string) string {
+	h := sha256.Sum256([]byte(salt + ":" + secret))
+	return hex.EncodeToString(h[:])
 }
 
 func hostnameOnly(h string) string {

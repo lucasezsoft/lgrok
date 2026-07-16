@@ -32,16 +32,30 @@ irm https://lgrok.suaempresa.com/download/install-client.ps1 | iex
 ### 2. Gere seu link
 
 ```bash
-lgrok http 3000 --server https://lgrok.suaempresa.com --token SEU_TOKEN
-# lgrok: forwarding https://x7k2m9ab.suaempresa.com -> 127.0.0.1:3000
+lgrok http 3000
 ```
 
+Na **primeira vez**, ele faz 3 perguntas e nunca mais:
+
+```
+Token da empresa (peça ao administrador): ********
+Subdomínio desejado (ex.: meuapp.suaempresa.com — vazio = aleatório): meuapp
+Senha do subdomínio (criada na 1ª vez, exigida nas seguintes): ********
+lgrok: configuração salva em ~/.lgrok.json — da próxima vez rode só: lgrok http 3000
+lgrok: forwarding https://meuapp.suaempresa.com -> 127.0.0.1:3000
+```
+
+A senha **trava o subdomínio para você**: ela fica registrada no servidor (como
+hash) e, a partir daí, só quem tem a senha consegue subir `meuapp.suaempresa.com`.
+Tudo fica salvo em `~/.lgrok.json` na sua máquina — nas próximas vezes é só
+`lgrok http 3000`, sem perguntas.
+
 Dicas:
-- `--subdomain meuapp` fixa a URL em `meuapp.suaempresa.com` (senão é aleatória).
-- Configure `LGROK_SERVER` e `LGROK_TOKEN` como variáveis de ambiente uma única vez
-  e o comando vira só `lgrok http 3000`.
+- Flags `--subdomain`, `--secret`, `--token` e `--server` sobrescrevem a config
+  salva (útil para um segundo subdomínio ou para scripts/CI).
 - Caiu a internet? O CLI reconecta sozinho e **mantém a mesma URL**.
 - Funciona com WebSocket e SSE (streaming) normalmente.
+- Para recomeçar do zero, apague o `~/.lgrok.json`.
 
 ---
 
@@ -149,5 +163,8 @@ install-client.* instaladores do CLI (servidos pelo próprio servidor)
 
 - **Token obrigatório**: sem ele, ninguém abre túnel no seu servidor. Trafega
   sempre dentro do TLS. Um token por empresa (sem contas individuais).
+- **Subdomínios com dono**: o primeiro cliente que sobe um subdomínio com senha o
+  reserva; o servidor guarda só o hash (com salt) e as senhas nunca aparecem em
+  logs. As reservas sobrevivem a restarts/updates (volume Docker `lgrokd_data`).
 - Apenas túneis **HTTP/HTTPS/WebSocket** — TCP puro (banco, SSH) fica de fora.
 - Sem painel de inspeção de requisições — decisão de escopo: só o funcional.
