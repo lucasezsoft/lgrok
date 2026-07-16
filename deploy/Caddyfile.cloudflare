@@ -13,5 +13,9 @@
 	tls {
 		dns cloudflare {$CF_API_TOKEN}
 	}
-	reverse_proxy lgrokd:8080
+	reverse_proxy lgrokd:8080 {
+		# sobrescreve o header (o padrão acrescenta): senão um cliente forja
+		# o IP de origem e escapa do bloqueio do painel /admin
+		header_up X-Forwarded-For {remote_host}
+	}
 }

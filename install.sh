@@ -20,7 +20,7 @@ set -euo pipefail
 REPO_TARBALL="${LGROK_REPO_TARBALL:-https://github.com/lucasezsoft/lgrok/archive/refs/heads/main.tar.gz}"
 INSTALL_DIR=/opt/lgrok
 
-DOMAIN="" EMAIL="" TOKEN="" CF_TOKEN="" ADMIN_PASS=""
+DOMAIN="" EMAIL="" TOKEN="" CF_TOKEN="" ADMIN_PASS="" BEHIND_NGINX=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain)     DOMAIN="$2";     shift 2 ;;
@@ -28,6 +28,7 @@ while [[ $# -gt 0 ]]; do
     --token)      TOKEN="$2";      shift 2 ;;
     --cf-token)   CF_TOKEN="$2";   shift 2 ;; # API token Cloudflare -> cert wildcard via DNS-01
     --admin-pass) ADMIN_PASS="$2"; shift 2 ;; # senha do painel /admin
+    --behind-nginx) BEHIND_NGINX=1; shift ;;  # VPS já tem nginx nas portas 80/443
     *) echo "flag desconhecida: $1" >&2; exit 1 ;;
   esac
 done
@@ -37,7 +38,8 @@ command -v apt-get >/dev/null || { echo "erro: este instalador suporta Ubuntu/De
 
 # As portas 80/443 precisam estar livres (o Caddy usa as duas para o HTTPS
 # automático). Falha aqui é muito mais barata do que depois de compilar tudo.
-if command -v ss >/dev/null; then
+# Com --behind-nginx quem usa as portas é o nginx da máquina — por isso pulamos.
+if [[ -z "$BEHIND_NGINX" ]] && command -v ss >/dev/null; then
   for p in 80 443; do
     line="$(ss -tlnpH "sport = :$p" 2>/dev/null | head -1)" || true
     [[ -n "$line" ]] || continue
@@ -46,10 +48,14 @@ if command -v ss >/dev/null; then
 erro: a porta $p já está em uso${who:+ pelo processo "$who"}.
       O lgrok precisa das portas 80 e 443 livres (HTTPS automático).
 
-      Se você não usa esse serviço, pare e desabilite:
+      Se essa VPS já roda sites em um nginx que você quer manter, instale
+      no modo "atrás do nginx" (o lgrok não toca nas portas nem nos sites):
+
+        curl -fsSL .../install.sh | sudo bash -s -- --behind-nginx \\
+          --domain SEUDOMINIO --email VOCE@EXEMPLO.COM
+
+      Se o serviço não é usado, pare e desabilite antes de tentar de novo:
         systemctl disable --now ${who:-nginx}
-      Se ele é necessário nesta VPS, use outra VPS para o lgrok
-      (ou veja "Convivendo com um servidor web existente" no README).
 EOF
     exit 1
   done
@@ -112,11 +118,65 @@ if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active
   ufw allow 443/tcp >/dev/null
 fi
 
+COMPOSE_FILE=docker-compose.prod.yml
+[[ -z "$BEHIND_NGINX" ]] || COMPOSE_FILE=docker-compose.behind-proxy.yml
+
 echo "==> Compilando e subindo o servidor (pode levar alguns minutos)..."
 cd "$INSTALL_DIR/deploy"
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f "$COMPOSE_FILE" up -d --build
+
+# Modo atrás do nginx: gera a config pronta, mas NÃO ativa nada — mexer no
+# nginx de uma máquina com sites em produção é decisão do administrador.
+if [[ -n "$BEHIND_NGINX" ]]; then
+  sed "s/__LGROK_DOMAIN__/$DOMAIN/g" "$INSTALL_DIR/deploy/nginx-lgrok.conf" \
+    > /etc/nginx/sites-available/lgrok
+fi
 
 IP="$(curl -fsS -4 --max-time 10 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
+
+if [[ -n "$BEHIND_NGINX" ]]; then
+cat <<EOF
+
+============================================================
+ ✔ lgrokd rodando em 127.0.0.1:8080 (atrás do seu nginx)
+============================================================
+ Seus sites atuais NÃO foram tocados. Faltam 3 passos manuais:
+
+1) DNS — crie estes 2 registros apontando para $IP:
+
+     A    lgrok.$DOMAIN
+     A    *.$DOMAIN
+
+2) Certificado wildcard (o nginx termina o TLS). Com certbot + DNS-01,
+   ex. Cloudflare:
+
+     apt install -y python3-certbot-dns-cloudflare
+     printf 'dns_cloudflare_api_token = SEU_TOKEN\n' > /root/.cf.ini && chmod 600 /root/.cf.ini
+     certbot certonly --dns-cloudflare --dns-cloudflare-credentials /root/.cf.ini \\
+       -d '$DOMAIN' -d '*.$DOMAIN' -m $EMAIL --agree-tos
+
+   (Outro provedor de DNS: troque o plugin — certbot-dns-route53,
+    certbot-dns-digitalocean etc. Veja o README.)
+
+3) Ative o site do lgrok (a config já está pronta e revisável):
+
+     cat /etc/nginx/sites-available/lgrok        # revise antes
+     ln -s /etc/nginx/sites-available/lgrok /etc/nginx/sites-enabled/lgrok
+     nginx -t && systemctl reload nginx
+
+Depois disso: https://lgrok.$DOMAIN (clientes) e /admin (painel).
+
+Token dos clientes (embutido no instalador; guarde para referência):
+  $TOKEN
+
+Gerenciamento:
+  logs:      cd $INSTALL_DIR/deploy && docker compose -f docker-compose.behind-proxy.yml logs -f
+  reiniciar: cd $INSTALL_DIR/deploy && docker compose -f docker-compose.behind-proxy.yml restart
+  senha admin / token: edite $INSTALL_DIR/deploy/.env e rode 'restart'
+============================================================
+EOF
+exit 0
+fi
 
 cat <<EOF
 

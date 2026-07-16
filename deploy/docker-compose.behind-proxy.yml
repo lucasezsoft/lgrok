@@ -1,0 +1,22 @@
+# Deploy para VPS que JÁ TEM nginx/apache nas portas 80/443.
+#
+# Aqui não subimos o Caddy: o lgrokd escuta só em 127.0.0.1:8080 e o seu
+# nginx (que continua dono do 80/443 e dos sites que já rodam) repassa
+# lgrok.<domínio> e *.<domínio> para ele. O TLS fica com o nginx.
+#
+#   docker compose -f docker-compose.behind-proxy.yml up -d --build
+services:
+  lgrokd:
+    build: ..
+    command: ["--domain", "${LGROK_DOMAIN}", "--scheme", "https"]
+    environment:
+      LGROK_TOKEN: ${LGROK_TOKEN}
+      LGROK_ADMIN_PASS: ${LGROK_ADMIN_PASS}
+    ports:
+      - "127.0.0.1:8080:8080"   # só localhost: quem fala com a internet é o nginx
+    volumes:
+      - lgrokd_data:/data
+    restart: unless-stopped
+
+volumes:
+  lgrokd_data:
