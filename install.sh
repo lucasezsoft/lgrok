@@ -35,6 +35,26 @@ done
 [[ $EUID -eq 0 ]] || { echo "erro: rode como root (sudo)." >&2; exit 1; }
 command -v apt-get >/dev/null || { echo "erro: este instalador suporta Ubuntu/Debian." >&2; exit 1; }
 
+# As portas 80/443 precisam estar livres (o Caddy usa as duas para o HTTPS
+# automático). Falha aqui é muito mais barata do que depois de compilar tudo.
+if command -v ss >/dev/null; then
+  for p in 80 443; do
+    line="$(ss -tlnpH "sport = :$p" 2>/dev/null | head -1)" || true
+    [[ -n "$line" ]] || continue
+    who="$(printf '%s' "$line" | grep -oE 'users:\(\("[^"]+' | cut -d'"' -f2)"
+    cat >&2 <<EOF
+erro: a porta $p já está em uso${who:+ pelo processo "$who"}.
+      O lgrok precisa das portas 80 e 443 livres (HTTPS automático).
+
+      Se você não usa esse serviço, pare e desabilite:
+        systemctl disable --now ${who:-nginx}
+      Se ele é necessário nesta VPS, use outra VPS para o lgrok
+      (ou veja "Convivendo com um servidor web existente" no README).
+EOF
+    exit 1
+  done
+fi
+
 ask() { local v; read -rp "$1: " v </dev/tty; echo "$v"; }
 asksecret() { local v; read -rsp "$1: " v </dev/tty; echo >/dev/tty; echo "$v"; }
 [[ -n "$DOMAIN" ]] || DOMAIN="$(ask 'Domínio base (ex.: suaempresa.com — os links ficam abc.suaempresa.com)')"
