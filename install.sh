@@ -20,13 +20,14 @@ set -euo pipefail
 REPO_TARBALL="${LGROK_REPO_TARBALL:-https://github.com/lucasezsoft/lgrok/archive/refs/heads/main.tar.gz}"
 INSTALL_DIR=/opt/lgrok
 
-DOMAIN="" EMAIL="" TOKEN="" CF_TOKEN=""
+DOMAIN="" EMAIL="" TOKEN="" CF_TOKEN="" ADMIN_PASS=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --domain)   DOMAIN="$2";   shift 2 ;;
-    --email)    EMAIL="$2";    shift 2 ;;
-    --token)    TOKEN="$2";    shift 2 ;;
-    --cf-token) CF_TOKEN="$2"; shift 2 ;; # API token Cloudflare -> cert wildcard via DNS-01
+    --domain)     DOMAIN="$2";     shift 2 ;;
+    --email)      EMAIL="$2";      shift 2 ;;
+    --token)      TOKEN="$2";      shift 2 ;;
+    --cf-token)   CF_TOKEN="$2";   shift 2 ;; # API token Cloudflare -> cert wildcard via DNS-01
+    --admin-pass) ADMIN_PASS="$2"; shift 2 ;; # senha do painel /admin
     *) echo "flag desconhecida: $1" >&2; exit 1 ;;
   esac
 done
@@ -35,9 +36,12 @@ done
 command -v apt-get >/dev/null || { echo "erro: este instalador suporta Ubuntu/Debian." >&2; exit 1; }
 
 ask() { local v; read -rp "$1: " v </dev/tty; echo "$v"; }
+asksecret() { local v; read -rsp "$1: " v </dev/tty; echo >/dev/tty; echo "$v"; }
 [[ -n "$DOMAIN" ]] || DOMAIN="$(ask 'Domínio base (ex.: suaempresa.com — os links ficam abc.suaempresa.com)')"
 [[ -n "$EMAIL"  ]] || EMAIL="$(ask "E-mail para os certificados Let's Encrypt")"
+[[ -n "$ADMIN_PASS" ]] || ADMIN_PASS="$(asksecret 'Senha do administrador (para acessar lgrok.'"$DOMAIN"'/admin)')"
 [[ -n "$DOMAIN" && -n "$EMAIL" ]] || { echo "erro: domínio e e-mail são obrigatórios." >&2; exit 1; }
+[[ -n "$ADMIN_PASS" ]] || { echo "erro: a senha do administrador é obrigatória." >&2; exit 1; }
 
 echo "==> Instalando dependências..."
 export DEBIAN_FRONTEND=noninteractive
@@ -71,6 +75,7 @@ fi
 cat > "$INSTALL_DIR/deploy/.env" <<EOF
 LGROK_DOMAIN=$DOMAIN
 LGROK_TOKEN=$TOKEN
+LGROK_ADMIN_PASS=$ADMIN_PASS
 ACME_EMAIL=$EMAIL
 EOF
 if [[ -n "$CF_TOKEN" ]]; then
@@ -106,22 +111,27 @@ cat <<EOF
 
    (Cloudflare: deixe como "DNS only" / nuvem cinza)
 
-2) Token de acesso dos clientes (guarde com cuidado):
+2) Assim que o DNS propagar, seus clientes instalam o CLI (o token já vai
+   embutido — eles não precisam dele) com uma linha:
 
-     $TOKEN
+     macOS/Linux:  curl -fsSL https://lgrok.$DOMAIN/download/install-client.sh | bash
+     Windows:      irm https://lgrok.$DOMAIN/download/install-client.ps1 | iex
 
-3) Assim que o DNS propagar, os clientes baixam o CLI em:
+   e geram o link deles com:  lgrok http 3000
 
-     https://lgrok.$DOMAIN                (página com os links)
-     https://lgrok.$DOMAIN/download/
+3) Painel do administrador (com a senha que você definiu agora):
 
-   E geram o link público deles com:
+     https://lgrok.$DOMAIN/admin
 
-     lgrok http 3000 --server https://lgrok.$DOMAIN --token $TOKEN
+   Mostra os túneis ativos, requisições por túnel, e botões para bloquear
+   um IP abusivo ou deletar/liberar um subdomínio.
+
+Token dos clientes (fica embutido no instalador; guarde para referência):
+  $TOKEN
 
 Gerenciamento:
   logs:      cd $INSTALL_DIR/deploy && docker compose -f docker-compose.prod.yml logs -f
   reiniciar: cd $INSTALL_DIR/deploy && docker compose -f docker-compose.prod.yml restart
-  status:    curl -s https://lgrok.$DOMAIN
+  senha admin / token: edite $INSTALL_DIR/deploy/.env e rode 'restart'
 ============================================================
 EOF

@@ -10,6 +10,8 @@ services:
     ports:
       - "8080:8080"
     command: ["--domain", "lvh.me:8080", "--scheme", "http", "--token", "dev-token"]
+    environment:
+      LGROK_ADMIN_PASS: dev-admin
     volumes:
       - lgrokd_data:/data
     restart: unless-stopped

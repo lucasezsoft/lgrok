@@ -64,11 +64,9 @@ func main() {
 	subdomain := pick(*subFlag, cfg.Subdomain)
 	secret := pick(*secretFlag, os.Getenv("LGROK_SECRET"), cfg.Secret)
 
-	// first-run questionnaire (interactive terminals only)
+	// first-run questionnaire (interactive terminals only). The token comes
+	// pre-configured by the installer, so we only ask subdomain + password.
 	if term.IsTerminal(int(os.Stdin.Fd())) {
-		if token == "" {
-			token = promptSecret("Token da empresa (peça ao administrador)")
-		}
 		if subdomain == "" {
 			subdomain = promptLine(fmt.Sprintf("Subdomínio desejado (ex.: meuapp.%s — vazio = aleatório)", baseDomain(server)))
 		}

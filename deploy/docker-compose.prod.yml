@@ -12,6 +12,7 @@ services:
     command: ["--domain", "${LGROK_DOMAIN}", "--scheme", "https"]
     environment:
       LGROK_TOKEN: ${LGROK_TOKEN}
+      LGROK_ADMIN_PASS: ${LGROK_ADMIN_PASS}
     volumes:
       - lgrokd_data:/data   # senhas dos subdomínios (sobrevive a updates)
     restart: unless-stopped

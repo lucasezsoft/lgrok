@@ -21,10 +21,11 @@ if ($userPath -notlike "*$dir*") {
     Write-Host "==> Pasta $dir adicionada ao PATH (abra um novo terminal se o comando nao for encontrado)"
 }
 
-# Pré-configura o servidor para a primeira execução (não sobrescreve config existente)
+# Pré-configura servidor + token (o servidor injeta o token real ao servir este script)
 $cfg = Join-Path $env:USERPROFILE ".lgrok.json"
+$token = "__LGROK_TOKEN__"
 if (-not (Test-Path $cfg)) {
-    "{`n  `"server`": `"$server`"`n}" | Set-Content -Encoding UTF8 $cfg
+    "{`n  `"server`": `"$server`",`n  `"token`": `"$token`"`n}" | Set-Content -Encoding UTF8 $cfg
 }
 
 Write-Host ""
@@ -34,6 +35,6 @@ Write-Host "Para gerar seu link publico, rode (com sua aplicacao no ar, ex.: por
 Write-Host ""
 Write-Host "  lgrok http 3000"
 Write-Host ""
-Write-Host "Na primeira vez ele pergunta o token da empresa, o subdominio que voce"
-Write-Host "quer e uma senha que trava esse subdominio para voce. Fica tudo salvo"
-Write-Host "em $cfg - nas proximas vezes e so rodar o comando."
+Write-Host "Na primeira vez ele pergunta o subdominio que voce quer e uma senha"
+Write-Host "que trava esse subdominio para voce. Fica tudo salvo em $cfg -"
+Write-Host "nas proximas vezes e so rodar o comando."
