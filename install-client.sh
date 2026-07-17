@@ -8,7 +8,6 @@
 set -euo pipefail
 
 SERVER="${LGROK_SERVER:-__LGROK_SERVER__}"
-INSTALL_DIR="${LGROK_INSTALL_DIR:-/usr/local/bin}"
 
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64)             BIN=lgrok-darwin-arm64 ;;
@@ -17,16 +16,29 @@ case "$(uname -s)-$(uname -m)" in
   *) echo "erro: plataforma não suportada: $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
 
+# Instala SEM sudo/senha: usa uma pasta sua. /usr/local/bin só se já for
+# gravável (evita o prompt de senha do Mac, que falha via 'curl | bash').
+if [[ -n "${LGROK_INSTALL_DIR:-}" ]]; then
+  INSTALL_DIR="$LGROK_INSTALL_DIR"
+elif [[ -w /usr/local/bin ]]; then
+  INSTALL_DIR=/usr/local/bin
+else
+  INSTALL_DIR="$HOME/.local/bin"
+fi
+mkdir -p "$INSTALL_DIR"
+
 TMP="$(mktemp)"
 echo "==> Baixando $BIN de $SERVER..."
 curl -fsSL "$SERVER/download/$BIN" -o "$TMP"
 chmod +x "$TMP"
+mv "$TMP" "$INSTALL_DIR/lgrok"
 
-if [[ -w "$INSTALL_DIR" ]]; then
-  mv "$TMP" "$INSTALL_DIR/lgrok"
-else
-  echo "==> Instalando em $INSTALL_DIR (pode pedir sua senha)..."
-  sudo mv "$TMP" "$INSTALL_DIR/lgrok"
+# Garante a pasta no PATH (sem sudo). Prepend para vencer um lgrok antigo.
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+  rc="$HOME/.zshrc"; [[ "${SHELL:-}" == */bash ]] && rc="$HOME/.bashrc"
+  grep -qs '# lgrok PATH' "$rc" 2>/dev/null || printf '\n# lgrok PATH\nexport PATH="%s:$PATH"\n' "$INSTALL_DIR" >> "$rc"
+  echo "==> Adicionei $INSTALL_DIR ao seu PATH ($rc)."
+  echo "    Para usar agora nesta janela:  export PATH=\"$INSTALL_DIR:\$PATH\""
 fi
 
 # Sempre atualiza server + token (o servidor injeta o token real ao servir este

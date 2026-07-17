@@ -177,8 +177,15 @@ func checkVersion(server string) {
 			"Atualizar agora? [Enter = sim, Ctrl+C = cancelar] ", version.V, h.Version)
 		stdin.ReadString('\n')
 		runInstaller(server)
-		// re-lança o binário novo com os mesmos argumentos
-		if exe, err := os.Executable(); err == nil && runtime.GOOS != "windows" {
+		// re-lança o binário novo. Prefere ~/.local/bin/lgrok (para onde o
+		// instalador sem-sudo escreve), senão o próprio caminho atual.
+		exe, _ := os.Executable()
+		if home, e := os.UserHomeDir(); e == nil {
+			if p := filepath.Join(home, ".local", "bin", "lgrok"); fileExists(p) {
+				exe = p
+			}
+		}
+		if exe != "" && runtime.GOOS != "windows" {
 			syscall.Exec(exe, os.Args, os.Environ())
 		}
 		fmt.Fprintln(os.Stderr, "lgrok: atualizado. Rode o comando de novo.")
@@ -203,6 +210,11 @@ func runInstaller(server string) {
 	if err := c.Run(); err != nil {
 		log.Fatalf("lgrok: falha ao atualizar: %v", err)
 	}
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 func updateCommand(server string) string {
