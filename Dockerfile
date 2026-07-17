@@ -3,14 +3,15 @@
 FROM golang:1.25-alpine AS build
 WORKDIR /src
 COPY . .
-# -mod=vendor: compila usando ./vendor, sem tocar em proxy.golang.org (funciona
-# mesmo em servidor que não alcança o proxy de módulos do Go).
-ENV GOFLAGS=-mod=vendor
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /lgrokd ./cmd/lgrokd && \
-    CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-darwin-arm64      ./cmd/lgrok && \
-    CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-darwin-amd64      ./cmd/lgrok && \
-    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-windows-amd64.exe ./cmd/lgrok && \
-    CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-linux-amd64       ./cmd/lgrok && \
+# -mod=vendor: compila usando ./vendor, sem tocar em proxy.golang.org.
+# GOFLAGS=-p=1 + GOGC baixo: serializa a compilação e coleta lixo com mais
+# frequência, para caber em VPS de pouca RAM (512 MB) sem estourar (OOM).
+ENV GOFLAGS="-mod=vendor -p=1" GOGC=20 CGO_ENABLED=0
+RUN go build -trimpath -ldflags "-s -w" -o /lgrokd ./cmd/lgrokd && \
+    GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-darwin-arm64      ./cmd/lgrok && \
+    GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-darwin-amd64      ./cmd/lgrok && \
+    GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-windows-amd64.exe ./cmd/lgrok && \
+    GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-linux-amd64       ./cmd/lgrok && \
     cp install.sh install-client.sh install-client.ps1 /dist/ && \
     tar czf /dist/lgrok-src.tar.gz -C / src
 
