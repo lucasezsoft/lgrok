@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
+	"lgrok/internal/version"
 )
 
 var subdomainRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -90,7 +91,7 @@ func main() {
 	s.loadState()
 	s.syncAdminPassword(os.Getenv("LGROK_ADMIN_PASS"))
 
-	log.Printf("lgrokd listening on %s, tunnel URLs: %s://<sub>.%s", *addr, s.scheme, s.domain)
+	log.Printf("lgrokd %s listening on %s, tunnel URLs: %s://<sub>.%s", version.V, *addr, s.scheme, s.domain)
 	srv := &http.Server{Addr: *addr, Handler: s, ReadHeaderTimeout: 10 * time.Second}
 	log.Fatal(srv.ListenAndServe())
 }
@@ -116,6 +117,9 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
+	case "/health":
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"status":"ok","version":%q,"tunnels":%d}`+"\n", version.V, s.count())
 	case "/_lgrok/connect":
 		s.handleConnect(w, r)
 	case "/_lgrok/ask": // Caddy on_demand_tls ask endpoint

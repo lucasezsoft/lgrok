@@ -59,6 +59,14 @@ Dicas:
 - Funciona com WebSocket e SSE (streaming) normalmente.
 - Para recomeçar do zero, apague o `~/.lgrok.json`.
 
+### Atualização automática
+
+Toda vez que você roda `lgrok http ...`, ele confere a versão do servidor
+(`/health`). Se o servidor foi atualizado, ele avisa e pergunta *"Atualizar
+agora? [Enter]"* — apertando Enter, baixa a versão nova, se reinstala e reconecta
+sozinho. Para forçar a qualquer momento: `lgrok update`. Ver a versão: `lgrok
+version`.
+
 ---
 
 ## 🏢 Sou a empresa — quero montar meu servidor

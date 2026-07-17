@@ -21,20 +21,30 @@ if ($userPath -notlike "*$dir*") {
     Write-Host "==> Pasta $dir adicionada ao PATH (abra um novo terminal se o comando nao for encontrado)"
 }
 
-# Pré-configura servidor + token (o servidor injeta o token real ao servir este script)
+# Grava servidor + token e ja pergunta subdominio + senha, salvando tudo no
+# config local. Assim as proximas execucoes sao so "lgrok http 3000".
 $cfg = Join-Path $env:USERPROFILE ".lgrok.json"
 $token = "__LGROK_TOKEN__"
-if (-not (Test-Path $cfg)) {
-    "{`n  `"server`": `"$server`",`n  `"token`": `"$token`"`n}" | Set-Content -Encoding UTF8 $cfg
+$base = $server -replace '^https?://','' -replace '^lgrok\.',''   # ex.: uberlandia.dev.br
+if (Test-Path $cfg) {
+    Write-Host "==> $cfg ja existe - mantendo sua configuracao atual."
+} else {
+    $sub = Read-Host "Subdominio que voce quer (ex.: meuapp.$base - vazio = aleatorio)"
+    $secret = ""
+    if ($sub -ne "") {
+        $sec = Read-Host "Senha para travar `"$sub.$base`" (criada agora, exigida depois)" -AsSecureString
+        $secret = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+    }
+    $obj = [ordered]@{ server = $server; token = $token; subdomain = $sub; secret = $secret }
+    $obj | ConvertTo-Json | Set-Content -Encoding UTF8 $cfg
 }
 
 Write-Host ""
 Write-Host "OK lgrok instalado em $dir\lgrok.exe"
 Write-Host ""
-Write-Host "Para gerar seu link publico, rode (com sua aplicacao no ar, ex.: porta 3000):"
+Write-Host "Agora e so rodar (com sua aplicacao no ar, ex.: porta 3000):"
 Write-Host ""
 Write-Host "  lgrok http 3000"
 Write-Host ""
-Write-Host "Na primeira vez ele pergunta o subdominio que voce quer e uma senha"
-Write-Host "que trava esse subdominio para voce. Fica tudo salvo em $cfg -"
-Write-Host "nas proximas vezes e so rodar o comando."
+Write-Host "Configuracao salva em $cfg."

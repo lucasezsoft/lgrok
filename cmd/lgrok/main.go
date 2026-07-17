@@ -21,13 +21,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/hashicorp/yamux"
 	"golang.org/x/term"
+	"lgrok/internal/version"
 )
 
 type config struct {
@@ -39,6 +43,17 @@ type config struct {
 
 func main() {
 	log.SetFlags(0)
+	if len(os.Args) >= 2 && (os.Args[1] == "version" || os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("lgrok", version.V)
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "update" {
+		cfg := loadConfig()
+		server := pick(os.Getenv("LGROK_SERVER"), cfg.Server, "http://localhost:8080")
+		runInstaller(server)
+		fmt.Println("lgrok: atualizado. Rode 'lgrok http <porta>' de novo.")
+		return
+	}
 	if len(os.Args) < 3 || os.Args[1] != "http" {
 		fmt.Fprintln(os.Stderr, "usage: lgrok http <local-port> [--server URL] [--subdomain NAME] [--token TOKEN] [--secret SENHA]")
 		os.Exit(2)
@@ -74,6 +89,8 @@ func main() {
 			secret = promptSecret("Senha do subdomínio (criada na 1ª vez, exigida nas seguintes)")
 		}
 	}
+
+	checkVersion(server)
 
 	saved := false
 	backoff := time.Second
@@ -114,6 +131,65 @@ func main() {
 		}
 		log.Printf("lgrok: connection lost, reconnecting...")
 	}
+}
+
+// checkVersion asks the server for its version. If the local binary is out of
+// date it offers to self-update (Enter) and re-launches; non-interactive, it
+// prints the one-line command and exits. Server unreachable -> stays quiet,
+// the connect loop reports that.
+func checkVersion(server string) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(strings.TrimRight(server, "/") + "/health")
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	var h struct{ Version string `json:"version"` }
+	if json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&h) != nil || h.Version == "" {
+		return
+	}
+	if h.Version == version.V {
+		return
+	}
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Fprintf(os.Stderr, "lgrok: nova versão disponível (local %s → servidor %s).\n"+
+			"Atualizar agora? [Enter = sim, Ctrl+C = cancelar] ", version.V, h.Version)
+		stdin.ReadString('\n')
+		runInstaller(server)
+		// re-lança o binário novo com os mesmos argumentos
+		if exe, err := os.Executable(); err == nil && runtime.GOOS != "windows" {
+			syscall.Exec(exe, os.Args, os.Environ())
+		}
+		fmt.Fprintln(os.Stderr, "lgrok: atualizado. Rode o comando de novo.")
+		os.Exit(0)
+	}
+	cmd := updateCommand(server)
+	log.Fatalf("lgrok: versão desatualizada (local %s, servidor %s).\n"+
+		"Atualize com:\n\n  %s\n", version.V, h.Version, cmd)
+}
+
+// runInstaller executes the server's official install script, which downloads
+// the right binary for this OS and handles sudo/PATH. Keeps existing config.
+func runInstaller(server string) {
+	fmt.Fprintln(os.Stderr, "lgrok: baixando a versão nova...")
+	var c *exec.Cmd
+	if runtime.GOOS == "windows" {
+		c = exec.Command("powershell", "-NoProfile", "-Command", updateCommand(server))
+	} else {
+		c = exec.Command("sh", "-c", updateCommand(server))
+	}
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stderr, os.Stderr
+	if err := c.Run(); err != nil {
+		log.Fatalf("lgrok: falha ao atualizar: %v", err)
+	}
+}
+
+func updateCommand(server string) string {
+	s := strings.TrimRight(server, "/")
+	if runtime.GOOS == "windows" {
+		return "irm " + s + "/download/install-client.ps1 | iex"
+	}
+	return "curl -fsSL " + s + "/download/install-client.sh | bash"
 }
 
 // connect dials the server, performs the upgrade handshake and returns the
