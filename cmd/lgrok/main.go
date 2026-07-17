@@ -89,6 +89,9 @@ func main() {
 			secret = promptSecret("Senha do subdomínio (criada na 1ª vez, exigida nas seguintes)")
 		}
 	}
+	// Usuários leem o exemplo "meuapp.dominio.com" e digitam tudo — fica só o
+	// primeiro rótulo ("meuapp"). Cobre flag, config e questionário.
+	subdomain = normalizeSub(subdomain)
 
 	checkVersion(server)
 
@@ -320,6 +323,18 @@ func pick(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// normalizeSub keeps only the first DNS label of what the user typed, so
+// "lucas", "lucas.uberlandia.dev.br" and " Lucas " all become "lucas".
+func normalizeSub(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimPrefix(s, "http://")
+	s = strings.TrimPrefix(s, "https://")
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		s = s[:i]
+	}
+	return s
 }
 
 // baseDomain extracts the mother domain from the server URL for the example

@@ -130,6 +130,13 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, "unknown domain", http.StatusNotFound)
 	default:
+		// Visita ao endpoint fixo lgrok.<domínio> no navegador -> repositório,
+		// marcando de qual instalação veio (utm_source = host de origem).
+		if host == "lgrok."+s.baseHost {
+			http.Redirect(w, r, "https://github.com/lucasezsoft/lgrok?utm_source="+host, http.StatusFound)
+			return
+		}
+		// Domínio base / localhost / IP: página de status em texto.
 		base := s.scheme + "://lgrok." + s.domain
 		fmt.Fprintf(w, `lgrok — servidor de túneis ativo (%d túneis abertos)
 

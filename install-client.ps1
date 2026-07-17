@@ -30,6 +30,7 @@ if (Test-Path $cfg) {
     Write-Host "==> $cfg ja existe - mantendo sua configuracao atual."
 } else {
     $sub = Read-Host "Subdominio que voce quer (ex.: meuapp.$base - vazio = aleatorio)"
+    $sub = (($sub.Trim().ToLower()) -split '\.')[0]   # so o 1o rotulo
     $secret = ""
     if ($sub -ne "") {
         $sec = Read-Host "Senha para travar `"$sub.$base`" (criada agora, exigida depois)" -AsSecureString

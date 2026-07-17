@@ -42,6 +42,7 @@ elif [[ -e /dev/tty ]]; then
   # curl | bash deixa o stdin ocupado pelo script; lemos do terminal real.
   printf 'Subdomínio que você quer (ex.: meuapp.%s — vazio = aleatório): ' "$BASE" >/dev/tty
   read -r SUB </dev/tty
+  SUB="$(printf '%s' "$SUB" | tr 'A-Z' 'a-z' | tr -d '[:space:]')"; SUB="${SUB%%.*}"  # só o 1º rótulo
   SECRET=""
   if [[ -n "$SUB" ]]; then
     printf 'Senha para travar "%s.%s" (criada agora, exigida depois): ' "$SUB" "$BASE" >/dev/tty
