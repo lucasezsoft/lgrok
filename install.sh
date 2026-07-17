@@ -36,6 +36,14 @@ done
 [[ $EUID -eq 0 ]] || { echo "erro: rode como root (sudo)." >&2; exit 1; }
 command -v apt-get >/dev/null || { echo "erro: este instalador suporta Ubuntu/Debian." >&2; exit 1; }
 
+# Reinstalação: derruba a stack lgrok anterior antes de tudo, para liberar as
+# portas 80/443 que são dela mesma (senão o preflight abaixo se auto-bloqueia).
+if command -v docker >/dev/null && [[ -d /opt/lgrok/deploy ]]; then
+  for f in docker-compose.prod.yml docker-compose.cloudflare.yml docker-compose.behind-proxy.yml; do
+    [[ -f "/opt/lgrok/deploy/$f" ]] && (cd /opt/lgrok/deploy && docker compose -f "$f" down >/dev/null 2>&1) || true
+  done
+fi
+
 # As portas 80/443 precisam estar livres (o Caddy usa as duas para o HTTPS
 # automático). Falha aqui é muito mais barata do que depois de compilar tudo.
 # Com --behind-nginx quem usa as portas é o nginx da máquina — por isso pulamos.
@@ -44,7 +52,16 @@ if [[ -z "$BEHIND_NGINX" ]] && command -v ss >/dev/null; then
     line="$(ss -tlnpH "sport = :$p" 2>/dev/null | head -1)" || true
     [[ -n "$line" ]] || continue
     who="$(printf '%s' "$line" | grep -oE 'users:\(\("[^"]+' | cut -d'"' -f2)"
-    cat >&2 <<EOF
+    if [[ "$who" == docker-proxy ]]; then
+      cat >&2 <<EOF
+erro: a porta $p está em uso por OUTRO container Docker (docker-proxy).
+      Veja qual é e pare-o:
+        docker ps            # descubra o container
+        docker stop <nome>   # libere a porta
+      Depois rode o instalador de novo.
+EOF
+    else
+      cat >&2 <<EOF
 erro: a porta $p já está em uso${who:+ pelo processo "$who"}.
       O lgrok precisa das portas 80 e 443 livres (HTTPS automático).
 
@@ -57,6 +74,7 @@ erro: a porta $p já está em uso${who:+ pelo processo "$who"}.
       Se o serviço não é usado, pare e desabilite antes de tentar de novo:
         systemctl disable --now ${who:-nginx}
 EOF
+    fi
     exit 1
   done
 fi
