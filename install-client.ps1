@@ -21,24 +21,12 @@ if ($userPath -notlike "*$dir*") {
     Write-Host "==> Pasta $dir adicionada ao PATH (abra um novo terminal se o comando nao for encontrado)"
 }
 
-# Grava servidor + token e ja pergunta subdominio + senha, salvando tudo no
-# config local. Assim as proximas execucoes sao so "lgrok http 3000".
+# Grava servidor + token. Sem perguntas: a 1a execucao ja sobe um subdominio
+# aleatorio. Dominio proprio depois: lgrok http <porta> --config
 $cfg = Join-Path $env:USERPROFILE ".lgrok.json"
 $token = "__LGROK_TOKEN__"
-$base = $server -replace '^https?://','' -replace '^lgrok\.',''   # ex.: uberlandia.dev.br
-if (Test-Path $cfg) {
-    Write-Host "==> $cfg ja existe - mantendo sua configuracao atual."
-} else {
-    $sub = Read-Host "Subdominio que voce quer (ex.: meuapp.$base - vazio = aleatorio)"
-    $sub = (($sub.Trim().ToLower()) -split '\.')[0]   # so o 1o rotulo
-    $secret = ""
-    if ($sub -ne "") {
-        $sec = Read-Host "Senha para travar `"$sub.$base`" (criada agora, exigida depois)" -AsSecureString
-        $secret = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
-    }
-    $obj = [ordered]@{ server = $server; token = $token; subdomain = $sub; secret = $secret }
-    $obj | ConvertTo-Json | Set-Content -Encoding UTF8 $cfg
+if (-not (Test-Path $cfg)) {
+    "{`n  `"server`": `"$server`",`n  `"token`": `"$token`"`n}" | Set-Content -Encoding UTF8 $cfg
 }
 
 Write-Host ""
@@ -48,4 +36,5 @@ Write-Host "Agora e so rodar (com sua aplicacao no ar, ex.: porta 3000):"
 Write-Host ""
 Write-Host "  lgrok http 3000"
 Write-Host ""
-Write-Host "Configuracao salva em $cfg."
+Write-Host "Na 1a vez ele ja sobe com um link temporario. Para um dominio proprio"
+Write-Host "e fixo (com senha): lgrok http 3000 --config"

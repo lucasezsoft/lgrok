@@ -120,6 +120,14 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/health":
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"status":"ok","version":%q,"tunnels":%d}`+"\n", version.V, s.count())
+	case "/client": // atalho: instalador do CLI (macOS/Linux)
+		r.URL.Path = "/download/install-client.sh"
+		s.serveDownload(w, r)
+	case "/client.ps1": // atalho: instalador do CLI (Windows)
+		r.URL.Path = "/download/install-client.ps1"
+		s.serveDownload(w, r)
+	case "/server": // atalho: instalador do servidor (vai ao repositório)
+		http.Redirect(w, r, "https://raw.githubusercontent.com/lucasezsoft/lgrok/main/install.sh", http.StatusFound)
 	case "/_lgrok/connect":
 		s.handleConnect(w, r)
 	case "/_lgrok/ask": // Caddy on_demand_tls ask endpoint
@@ -143,10 +151,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 Instalar o CLI:
 
   macOS / Linux (terminal):
-    curl -fsSL %s/download/install-client.sh | bash
+    curl -fsSL %s/client | bash
 
   Windows (PowerShell):
-    irm %s/download/install-client.ps1 | iex
+    irm %s/client.ps1 | iex
 
 Gerar seu link público:
 

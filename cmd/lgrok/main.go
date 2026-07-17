@@ -39,6 +39,7 @@ type config struct {
 	Token     string `json:"token,omitempty"`
 	Subdomain string `json:"subdomain,omitempty"`
 	Secret    string `json:"secret,omitempty"`
+	Auto      bool   `json:"auto,omitempty"` // subdomínio gerado automático (não é próprio)
 }
 
 func main() {
@@ -69,6 +70,7 @@ func main() {
 	subFlag := fs.String("subdomain", "", "subdomain (default: saved config or random)")
 	secretFlag := fs.String("secret", "", "subdomain password")
 	localHost := fs.String("local-host", "127.0.0.1", "local host to forward to")
+	reconfig := fs.Bool("config", false, "reconfigurar: pergunta subdomínio próprio e senha")
 	fs.Parse(os.Args[3:])
 	localAddr := net.JoinHostPort(*localHost, strconv.Itoa(port))
 
@@ -76,22 +78,29 @@ func main() {
 	cfg := loadConfig()
 	server := pick(*serverFlag, os.Getenv("LGROK_SERVER"), cfg.Server, "http://localhost:8080")
 	token := pick(*tokenFlag, os.Getenv("LGROK_TOKEN"), cfg.Token)
-	subdomain := pick(*subFlag, cfg.Subdomain)
+	subdomain := normalizeSub(pick(*subFlag, cfg.Subdomain))
 	secret := pick(*secretFlag, os.Getenv("LGROK_SECRET"), cfg.Secret)
+	auto := cfg.Auto
 
-	// first-run questionnaire (interactive terminals only). The token comes
-	// pre-configured by the installer, so we only ask subdomain + password.
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		if subdomain == "" {
-			subdomain = promptLine(fmt.Sprintf("Subdomínio desejado (ex.: meuapp.%s — vazio = aleatório)", baseDomain(server)))
-		}
-		if secret == "" && subdomain != "" {
-			secret = promptSecret("Senha do subdomínio (criada na 1ª vez, exigida nas seguintes)")
+	// --config (ou --subdomain/--secret na linha) define um domínio PRÓPRIO,
+	// perguntando o que faltar. Sem isso, a 1ª vez é instantânea: um subdomínio
+	// aleatório com nome de animal, sem perguntar nada.
+	interactive := term.IsTerminal(int(os.Stdin.Fd()))
+	if *reconfig && interactive {
+		subdomain = normalizeSub(promptLine(fmt.Sprintf("Subdomínio próprio (ex.: meuapp.%s)", baseDomain(server))))
+		if subdomain != "" {
+			secret = promptSecret("Senha do subdomínio (criada agora, exigida nas próximas vezes)")
+			auto = false
 		}
 	}
-	// Usuários leem o exemplo "meuapp.dominio.com" e digitam tudo — fica só o
-	// primeiro rótulo ("meuapp"). Cobre flag, config e questionário.
-	subdomain = normalizeSub(subdomain)
+	if *subFlag != "" || *secretFlag != "" { // domínio escolhido por flag também é próprio
+		auto = false
+	}
+	if subdomain == "" { // primeira vez ágil: gera e segue
+		subdomain = animalName()
+		secret = ""
+		auto = true
+	}
 
 	checkVersion(server)
 
@@ -102,6 +111,11 @@ func main() {
 		if err != nil {
 			if fatal {
 				log.Fatalf("lgrok: %v", err)
+			}
+			// nome de animal aleatório colidiu com um túnel ativo: sorteia outro
+			if auto && strings.Contains(err.Error(), "already in use") {
+				subdomain = animalName()
+				continue
 			}
 			log.Printf("lgrok: connect failed: %v (retrying in %s)", err, backoff)
 			time.Sleep(backoff)
@@ -117,7 +131,7 @@ func main() {
 		}
 		if !saved {
 			saved = true
-			nc := config{Server: server, Token: token, Subdomain: subdomain, Secret: secret}
+			nc := config{Server: server, Token: token, Subdomain: subdomain, Secret: secret, Auto: auto}
 			if nc != cfg {
 				if err := saveConfig(nc); err == nil {
 					log.Printf("lgrok: configuração salva em %s — da próxima vez rode só: lgrok http %d", configPath(), port)
@@ -125,6 +139,10 @@ func main() {
 			}
 		}
 		log.Printf("lgrok: forwarding %s -> %s", publicURL, localAddr)
+		if auto && interactive {
+			// amarelo: lembra que está num domínio temporário
+			fmt.Fprintf(os.Stderr, "\033[33m⚠ domínio temporário. Para um domínio próprio e fixo (com senha), rode: lgrok http %d --config\033[0m\n", port)
+		}
 		for {
 			stream, err := session.AcceptStream()
 			if err != nil {
@@ -190,9 +208,9 @@ func runInstaller(server string) {
 func updateCommand(server string) string {
 	s := strings.TrimRight(server, "/")
 	if runtime.GOOS == "windows" {
-		return "irm " + s + "/download/install-client.ps1 | iex"
+		return "irm " + s + "/client.ps1 | iex"
 	}
-	return "curl -fsSL " + s + "/download/install-client.sh | bash"
+	return "curl -fsSL " + s + "/client | bash"
 }
 
 // connect dials the server, performs the upgrade handshake and returns the
@@ -323,6 +341,22 @@ func pick(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+var animals = []string{
+	"capivara", "tucano", "lontra", "tatu", "tamandua", "onca", "arara",
+	"jacare", "boto", "quati", "preguica", "jaguatirica", "cutia", "sagui",
+	"raposa", "coruja", "golfinho", "tartaruga", "panda", "tigre", "lobo",
+	"pinguim", "foca", "urso", "gato", "cavalo", "coelho", "falcao",
+}
+
+// animalName returns a friendly random subdomain like "capivara-4821".
+func animalName() string {
+	b := make([]byte, 3)
+	rand.Read(b)
+	animal := animals[int(b[0])%len(animals)]
+	n := (int(b[1])<<8 | int(b[2])) % 9000 + 1000 // 1000..9999
+	return fmt.Sprintf("%s-%d", animal, n)
 }
 
 // normalizeSub keeps only the first DNS label of what the user typed, so

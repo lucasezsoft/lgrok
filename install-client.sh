@@ -29,31 +29,12 @@ else
   sudo mv "$TMP" "$INSTALL_DIR/lgrok"
 fi
 
-# Grava servidor + token (o servidor injeta o token real ao servir este script)
-# e já pergunta o subdomínio + senha, salvando tudo no config local. Assim as
-# próximas execuções são só "lgrok http 3000". Não sobrescreve config existente.
+# Grava servidor + token (o servidor injeta o token real ao servir este script).
+# Nada de perguntas aqui: a 1ª execução do lgrok já sobe um subdomínio aleatório
+# na hora. Um domínio próprio depois é só "lgrok http <porta> --config".
 CFG="${LGROK_CONFIG:-$HOME/.lgrok.json}"
 TOKEN="__LGROK_TOKEN__"
-BASE="${SERVER#*://}"; BASE="${BASE#lgrok.}"   # ex.: uberlandia.dev.br
-
-if [[ -f "$CFG" ]]; then
-  echo "==> $CFG já existe — mantendo sua configuração atual."
-elif [[ -e /dev/tty ]]; then
-  # curl | bash deixa o stdin ocupado pelo script; lemos do terminal real.
-  printf 'Subdomínio que você quer (ex.: meuapp.%s — vazio = aleatório): ' "$BASE" >/dev/tty
-  read -r SUB </dev/tty
-  SUB="$(printf '%s' "$SUB" | tr 'A-Z' 'a-z' | tr -d '[:space:]')"; SUB="${SUB%%.*}"  # só o 1º rótulo
-  SECRET=""
-  if [[ -n "$SUB" ]]; then
-    printf 'Senha para travar "%s.%s" (criada agora, exigida depois): ' "$SUB" "$BASE" >/dev/tty
-    read -rs SECRET </dev/tty; echo >/dev/tty
-  fi
-  printf '{\n  "server": "%s",\n  "token": "%s",\n  "subdomain": "%s",\n  "secret": "%s"\n}\n' \
-    "$SERVER" "$TOKEN" "$SUB" "$SECRET" > "$CFG"
-  chmod 600 "$CFG"
-else
-  # sem terminal (instalação automatizada): grava só server+token, o CLI
-  # pergunta subdomínio/senha na primeira execução interativa.
+if [[ ! -f "$CFG" ]]; then
   printf '{\n  "server": "%s",\n  "token": "%s"\n}\n' "$SERVER" "$TOKEN" > "$CFG"
   chmod 600 "$CFG"
 fi
@@ -66,5 +47,6 @@ Agora é só rodar (com sua aplicação no ar, ex.: porta 3000):
 
   lgrok http 3000
 
-Configuração salva em $CFG.
+Na 1ª vez ele já sobe com um link temporário. Para um domínio próprio e fixo
+(com senha): lgrok http 3000 --config
 EOF

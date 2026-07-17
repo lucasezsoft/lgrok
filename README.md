@@ -21,12 +21,12 @@ Troque `lgrok.suaempresa.com` pelo endereço que o administrador te passou.
 
 **macOS / Linux** (terminal):
 ```bash
-curl -fsSL https://lgrok.suaempresa.com/download/install-client.sh | bash
+curl -fsSL https://lgrok.suaempresa.com/client | bash
 ```
 
 **Windows** (PowerShell):
 ```powershell
-irm https://lgrok.suaempresa.com/download/install-client.ps1 | iex
+irm https://lgrok.suaempresa.com/client.ps1 | iex
 ```
 
 ### 2. Gere seu link
@@ -35,22 +35,30 @@ irm https://lgrok.suaempresa.com/download/install-client.ps1 | iex
 lgrok http 3000
 ```
 
-Na **primeira vez**, ele faz 2 perguntas e nunca mais:
+**A primeira vez já sobe na hora** — sem perguntar nada. O lgrok gera um link
+temporário com nome de bicho e avisa (em amarelo) que dá para configurar um
+próprio:
 
 ```
-Subdomínio desejado (ex.: meuapp.suaempresa.com — vazio = aleatório): meuapp
-Senha do subdomínio (criada na 1ª vez, exigida nas seguintes): ********
-lgrok: configuração salva em ~/.lgrok.json — da próxima vez rode só: lgrok http 3000
+lgrok: forwarding https://lontra-6401.suaempresa.com -> 127.0.0.1:3000
+⚠ domínio temporário. Para um domínio próprio e fixo (com senha), rode: lgrok http 3000 --config
+```
+
+Quando quiser um **domínio próprio e fixo**, rode com `--config`:
+
+```
+$ lgrok http 3000 --config
+Subdomínio próprio (ex.: meuapp.suaempresa.com): meuapp
+Senha do subdomínio (criada agora, exigida nas próximas vezes): ********
 lgrok: forwarding https://meuapp.suaempresa.com -> 127.0.0.1:3000
 ```
 
-Você **não precisa de token**: o instalador já embute o acesso da empresa quando
-você baixa o CLI do domínio dela. Basta instalar e usar.
+A senha **trava o subdomínio para você**: fica registrada no servidor (como hash)
+e, a partir daí, só quem tem a senha consegue subir `meuapp.suaempresa.com`. Tudo
+fica salvo em `~/.lgrok.json` — nas próximas vezes é só `lgrok http 3000`.
 
-A senha **trava o subdomínio para você**: ela fica registrada no servidor (como
-hash) e, a partir daí, só quem tem a senha consegue subir `meuapp.suaempresa.com`.
-Tudo fica salvo em `~/.lgrok.json` na sua máquina — nas próximas vezes é só
-`lgrok http 3000`, sem perguntas.
+Você **não precisa de token**: o instalador já embute o acesso da empresa quando
+você baixa o CLI do domínio dela.
 
 Dicas:
 - Pode digitar só o subdomínio (`meuapp`) ou o endereço inteiro
@@ -89,6 +97,11 @@ Durante a instalação ele pede uma **senha de administrador** (para o painel
 `/admin`). No final, imprime os registros DNS para criar e os links de instalação
 do CLI. Rodar de novo = atualizar. Sem flags, ele pergunta tudo interativamente
 (domínio, e-mail e senha de admin).
+
+> **URLs curtas**: todo servidor lgrok no ar expõe atalhos no próprio domínio —
+> `https://lgrok.suaempresa.com/client` (instalador do CLI),
+> `.../client.ps1` (Windows) e `.../server` (instalador do servidor, vai ao
+> repositório). São mais curtas de ditar/colar que o caminho do GitHub.
 
 ### 3. Aponte o DNS (2 registros)
 
