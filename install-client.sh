@@ -29,15 +29,27 @@ else
   sudo mv "$TMP" "$INSTALL_DIR/lgrok"
 fi
 
-# Grava servidor + token (o servidor injeta o token real ao servir este script).
-# Nada de perguntas aqui: a 1ª execução do lgrok já sobe um subdomínio aleatório
-# na hora. Um domínio próprio depois é só "lgrok http <porta> --config".
+# Sempre atualiza server + token (o servidor injeta o token real ao servir este
+# script), PRESERVANDO subdomínio/senha/auto de uma config existente. Assim
+# reinstalar/atualizar conserta um token trocado sem perder seu domínio próprio.
+# Nada de perguntas: a 1ª execução do lgrok já sobe um link temporário; domínio
+# próprio depois é "lgrok http <porta> --config".
 CFG="${LGROK_CONFIG:-$HOME/.lgrok.json}"
 TOKEN="__LGROK_TOKEN__"
-if [[ ! -f "$CFG" ]]; then
-  printf '{\n  "server": "%s",\n  "token": "%s"\n}\n' "$SERVER" "$TOKEN" > "$CFG"
-  chmod 600 "$CFG"
+SUB=""; SECRET=""; AUTO=""
+if [[ -f "$CFG" ]]; then
+  jget() { grep -oE "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$CFG" | sed -E 's/.*"([^"]*)"$/\1/' | head -1; }
+  SUB="$(jget subdomain)"; SECRET="$(jget secret)"
+  grep -qE '"auto"[[:space:]]*:[[:space:]]*true' "$CFG" && AUTO=1
 fi
+{
+  printf '{\n  "server": "%s",\n  "token": "%s"' "$SERVER" "$TOKEN"
+  [[ -n "$SUB"    ]] && printf ',\n  "subdomain": "%s"' "$SUB"
+  [[ -n "$SECRET" ]] && printf ',\n  "secret": "%s"' "$SECRET"
+  [[ -n "$AUTO"   ]] && printf ',\n  "auto": true'
+  printf '\n}\n'
+} > "$CFG"
+chmod 600 "$CFG"
 
 cat <<EOF
 

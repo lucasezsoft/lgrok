@@ -79,11 +79,25 @@ EOF
   done
 fi
 
+# Reinstalação: preserva token e senha de admin do .env anterior. Assim
+# atualizar o servidor NÃO invalida os clientes (o token continua o mesmo).
+ENVOLD=/opt/lgrok/deploy/.env
+getold() { [[ -f "$ENVOLD" ]] && grep -E "^$1=" "$ENVOLD" | cut -d= -f2- | head -1; }
+OLD_TOKEN="$(getold LGROK_TOKEN)"
+OLD_ADMIN="$(getold LGROK_ADMIN_PASS)"
+
 ask() { local v; read -rp "$1: " v </dev/tty; echo "$v"; }
 asksecret() { local v; read -rsp "$1: " v </dev/tty; echo >/dev/tty; echo "$v"; }
 [[ -n "$DOMAIN" ]] || DOMAIN="$(ask 'Domínio base (ex.: suaempresa.com — os links ficam abc.suaempresa.com)')"
 [[ -n "$EMAIL"  ]] || EMAIL="$(ask "E-mail para os certificados Let's Encrypt")"
-[[ -n "$ADMIN_PASS" ]] || ADMIN_PASS="$(asksecret 'Senha do administrador (para acessar lgrok.'"$DOMAIN"'/admin)')"
+if [[ -z "$ADMIN_PASS" ]]; then
+  if [[ -n "$OLD_ADMIN" ]]; then
+    ADMIN_PASS="$(asksecret 'Senha do administrador (Enter para manter a atual)')"
+    [[ -n "$ADMIN_PASS" ]] || ADMIN_PASS="$OLD_ADMIN"
+  else
+    ADMIN_PASS="$(asksecret 'Senha do administrador (para acessar lgrok.'"$DOMAIN"'/admin)')"
+  fi
+fi
 [[ -n "$DOMAIN" && -n "$EMAIL" ]] || { echo "erro: domínio e e-mail são obrigatórios." >&2; exit 1; }
 [[ -n "$ADMIN_PASS" ]] || { echo "erro: a senha do administrador é obrigatória." >&2; exit 1; }
 
@@ -92,6 +106,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq curl ca-certificates openssl >/dev/null
 
+# token: flag > .env anterior > novo aleatório
+[[ -n "$TOKEN" ]] || TOKEN="$OLD_TOKEN"
 [[ -n "$TOKEN" ]] || TOKEN="$(openssl rand -hex 24)"
 
 if ! command -v docker >/dev/null; then

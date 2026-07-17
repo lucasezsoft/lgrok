@@ -21,13 +21,17 @@ if ($userPath -notlike "*$dir*") {
     Write-Host "==> Pasta $dir adicionada ao PATH (abra um novo terminal se o comando nao for encontrado)"
 }
 
-# Grava servidor + token. Sem perguntas: a 1a execucao ja sobe um subdominio
-# aleatorio. Dominio proprio depois: lgrok http <porta> --config
+# Sempre atualiza server + token, preservando subdominio/senha/auto de uma
+# config existente. Sem perguntas: a 1a execucao ja sobe um link temporario;
+# dominio proprio depois: lgrok http <porta> --config
 $cfg = Join-Path $env:USERPROFILE ".lgrok.json"
 $token = "__LGROK_TOKEN__"
-if (-not (Test-Path $cfg)) {
-    "{`n  `"server`": `"$server`",`n  `"token`": `"$token`"`n}" | Set-Content -Encoding UTF8 $cfg
-}
+if (Test-Path $cfg) {
+    try { $c = Get-Content $cfg -Raw | ConvertFrom-Json } catch { $c = [pscustomobject]@{} }
+} else { $c = [pscustomobject]@{} }
+$c | Add-Member -NotePropertyName server -NotePropertyValue $server -Force
+$c | Add-Member -NotePropertyName token  -NotePropertyValue $token  -Force
+$c | ConvertTo-Json | Set-Content -Encoding UTF8 $cfg
 
 Write-Host ""
 Write-Host "OK lgrok instalado em $dir\lgrok.exe"
