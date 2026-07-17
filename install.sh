@@ -118,12 +118,18 @@ if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active
   ufw allow 443/tcp >/dev/null
 fi
 
-COMPOSE_FILE=docker-compose.prod.yml
-[[ -z "$BEHIND_NGINX" ]] || COMPOSE_FILE=docker-compose.behind-proxy.yml
+# Monta a lista de arquivos compose. Padrão usa a imagem oficial do Caddy
+# (só baixa). Cloudflare wildcard adiciona um override que COMPILA o plugin.
+COMPOSE=(-f docker-compose.prod.yml)
+if [[ -n "$BEHIND_NGINX" ]]; then
+  COMPOSE=(-f docker-compose.behind-proxy.yml)
+elif [[ -n "$CF_TOKEN" ]]; then
+  COMPOSE+=(-f docker-compose.cloudflare.yml)
+fi
 
-echo "==> Compilando e subindo o servidor (pode levar alguns minutos)..."
+echo "==> Subindo o servidor (pode levar alguns minutos)..."
 cd "$INSTALL_DIR/deploy"
-docker compose -f "$COMPOSE_FILE" up -d --build
+docker compose "${COMPOSE[@]}" up -d --build
 
 # Modo atrás do nginx: gera a config pronta, mas NÃO ativa nada — mexer no
 # nginx de uma máquina com sites em produção é decisão do administrador.

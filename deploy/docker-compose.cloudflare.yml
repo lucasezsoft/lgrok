@@ -1,0 +1,12 @@
+# Override OPCIONAL para certificado wildcard via Cloudflare (DNS-01).
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.cloudflare.yml up -d --build
+#
+# Isto COMPILA o Caddy com o plugin de DNS (xcaddy), o que exige que o
+# servidor alcance proxy.golang.org durante o build. Se o build falhar por
+# rede, use o modo padrão (on-demand) do docker-compose.prod.yml sozinho —
+# ele funciona igual com DNS na Cloudflare, só emite um cert por subdomínio.
+services:
+  caddy:
+    build: ./caddy
+    image: lgrok-caddy-cloudflare

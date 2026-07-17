@@ -104,13 +104,21 @@ GoDaddy, DigitalOcean DNS, qualquer um. Você não configura nada além dos 2
 registros acima. Cada subdomínio ganha seu certificado automaticamente no primeiro
 acesso (~2s só nessa primeira vez).
 
+O Caddy do modo padrão é a **imagem oficial** (`caddy:2`), que o Docker só baixa —
+nada é compilado no servidor. O `lgrokd` compila com dependências *vendoradas*
+(`vendor/`), então também não depende de `proxy.golang.org`: a instalação funciona
+em VPS com rede restrita ao proxy de módulos do Go.
+
 **Opcional — se o seu DNS estiver na Cloudflare:** passe `--cf-token SEU_TOKEN` no
-instalador (token criado em *My Profile → API Tokens → Edit zone DNS*) e o servidor
-emite **um único certificado wildcard** que cobre todos os subdomínios de uma vez:
-sem espera no primeiro acesso e sem o limite do Let's Encrypt de 50 certificados
-novos/semana (que só importa se seus clientes criarem dezenas de subdomínios
-aleatórios novos toda semana). É um upgrade, não uma dependência. Na Cloudflare,
-deixe os registros como "DNS only" (nuvem cinza).
+instalador (token criado em *My Profile → API Tokens → Edit zone DNS*) e ele emite
+**um único certificado wildcard** que cobre todos os subdomínios de uma vez: sem
+espera no primeiro acesso e sem o limite do Let's Encrypt de 50 certificados
+novos/semana. Na Cloudflare, deixe os registros como "DNS only" (nuvem cinza).
+
+> Esse modo **compila** o Caddy com o plugin de DNS (via xcaddy), o que exige que o
+> servidor alcance `proxy.golang.org` durante o build. Se o build falhar por rede,
+> use o modo padrão (on-demand) — ele funciona igual com DNS na Cloudflare, só emite
+> um certificado por subdomínio em vez de um wildcard.
 
 ### A VPS já tem nginx/apache rodando outros sites?
 

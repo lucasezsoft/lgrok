@@ -2,9 +2,10 @@
 # binários do CLI, install.sh e o código-fonte (lgrok-src.tar.gz).
 FROM golang:1.25-alpine AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
+# -mod=vendor: compila usando ./vendor, sem tocar em proxy.golang.org (funciona
+# mesmo em servidor que não alcança o proxy de módulos do Go).
+ENV GOFLAGS=-mod=vendor
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /lgrokd ./cmd/lgrokd && \
     CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-darwin-arm64      ./cmd/lgrok && \
     CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /dist/lgrok-darwin-amd64      ./cmd/lgrok && \

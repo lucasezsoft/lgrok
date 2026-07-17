@@ -1,0 +1,11 @@
+# github.com/hashicorp/yamux v0.1.2
+## explicit; go 1.20
+github.com/hashicorp/yamux
+# golang.org/x/sys v0.47.0
+## explicit; go 1.25.0
+golang.org/x/sys/plan9
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# golang.org/x/term v0.45.0
+## explicit; go 1.25.0
+golang.org/x/term

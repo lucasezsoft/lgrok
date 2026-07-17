@@ -18,12 +18,14 @@ services:
     restart: unless-stopped
 
   caddy:
-    build: ./caddy
+    # Imagem oficial (só baixa, não compila) — TLS on-demand por subdomínio.
+    # Para wildcard via Cloudflare, sobreponha com docker-compose.cloudflare.yml
+    # (que troca por uma imagem com o plugin de DNS).
+    image: ${CADDY_IMAGE:-caddy:2}
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      # CADDYFILE=Caddyfile.cloudflare no .env ativa o modo wildcard (DNS-01)
       - ./${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     environment:
