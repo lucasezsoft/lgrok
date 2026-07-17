@@ -67,7 +67,24 @@ Dicas:
   (útil para um segundo subdomínio ou para scripts/CI).
 - Caiu a internet? O CLI reconecta sozinho e **mantém a mesma URL**.
 - Funciona com WebSocket e SSE (streaming) normalmente.
+- As URLs no terminal saem em **verde e clicáveis** (nos terminais que suportam).
 - Para recomeçar do zero, apague o `~/.lgrok.json`.
+
+### Inspetor de requisições (como o do ngrok)
+
+Enquanto o túnel roda, abra **http://127.0.0.1:4040** no navegador: um painel local
+que mostra cada requisição que passou — método, status, headers e **corpo da
+requisição e da resposta**, com botão de copiar. Fica só na sua máquina (nada
+trafega para o servidor). Some quando você fecha o túnel.
+
+- Porta ocupada? Ele usa a próxima livre (4041, 4042…) e mostra a URL no terminal.
+- `--inspect-port 0` desliga o inspetor; `--inspect-port 9000` troca a porta.
+
+### Uma instância por porta
+
+Rodar `lgrok http 3000` duas vezes na mesma máquina/porta é barrado com um aviso
+claro — evita dois túneis apontando para o mesmo serviço sem querer. Portas
+diferentes rodam em paralelo normalmente.
 
 ### Atualização automática
 

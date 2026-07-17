@@ -71,8 +71,16 @@ func main() {
 	secretFlag := fs.String("secret", "", "subdomain password")
 	localHost := fs.String("local-host", "127.0.0.1", "local host to forward to")
 	reconfig := fs.Bool("config", false, "reconfigurar: pergunta subdomínio próprio e senha")
+	inspectPort := fs.Int("inspect-port", 4040, "porta do inspetor local (0 desliga)")
 	fs.Parse(os.Args[3:])
 	localAddr := net.JoinHostPort(*localHost, strconv.Itoa(port))
+
+	// única instância por porta nesta máquina (evita dois túneis na mesma porta)
+	unlock, err := lockPort(port)
+	if err != nil {
+		log.Fatalf("lgrok: %v", err)
+	}
+	defer unlock()
 
 	// precedence: flag > environment > saved config > default
 	cfg := loadConfig()
@@ -103,6 +111,13 @@ func main() {
 	}
 
 	checkVersion(server)
+
+	colored := term.IsTerminal(int(os.Stderr.Fd()))
+	rec := newRecorder()
+	var inspectURL string
+	if *inspectPort > 0 {
+		inspectURL = startInspector(rec, *inspectPort)
+	}
 
 	saved := false
 	backoff := time.Second
@@ -138,7 +153,10 @@ func main() {
 				}
 			}
 		}
-		log.Printf("lgrok: forwarding %s -> %s", publicURL, localAddr)
+		log.Printf("lgrok: forwarding %s -> %s", hyperlink(publicURL, colored), localAddr)
+		if inspectURL != "" {
+			log.Printf("lgrok: inspetor de requisições em %s", hyperlink(inspectURL, colored))
+		}
 		if auto && interactive {
 			// amarelo: lembra que está num domínio temporário
 			fmt.Fprintf(os.Stderr, "\033[33m⚠ domínio temporário. Para um domínio próprio e fixo (com senha), rode: lgrok http %d --config\033[0m\n", port)
@@ -148,7 +166,7 @@ func main() {
 			if err != nil {
 				break
 			}
-			go proxy(stream, localAddr)
+			go serveHTTPTunnel(stream, localAddr, rec)
 		}
 		log.Printf("lgrok: connection lost, reconnecting...")
 	}
@@ -298,19 +316,13 @@ func connect(rawURL, token, sub, secret string) (publicURL string, session *yamu
 	return resp.Header.Get("X-Lgrok-Url"), session, false, nil
 }
 
-// proxy pipes one tunneled stream into the local service.
-func proxy(stream net.Conn, localAddr string) {
-	local, err := net.Dial("tcp", localAddr)
-	if err != nil {
-		stream.Close()
-		return
+// hyperlink returns the URL as a green, clickable terminal hyperlink (OSC 8)
+// when writing to a terminal; otherwise the plain URL.
+func hyperlink(u string, colorize bool) string {
+	if !colorize {
+		return u
 	}
-	go func() {
-		io.Copy(stream, local)
-		stream.Close()
-	}()
-	io.Copy(local, stream)
-	local.Close()
+	return "\033]8;;" + u + "\033\\\033[32m" + u + "\033[0m\033]8;;\033\\"
 }
 
 // bufConn replays bytes the handshake reader may have buffered past the 101.
